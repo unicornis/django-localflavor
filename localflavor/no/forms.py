@@ -186,3 +186,34 @@ class NOPhoneNumberField(RegexField, DeprecatedPhoneNumberFormFieldMixin):
         super(NOPhoneNumberField, self).__init__(
             r'^(?:\+47)? ?(\d{3}\s?\d{2}\s?\d{3}|\d{2}\s?\d{2}\s?\d{2}\s?\d{2})$',
             max_length, min_length, *args, **kwargs)
+
+
+def multiply_reduce(aval, bval):
+    return sum([(a * b) for (a, b) in zip(aval, bval)])
+
+
+class NOBankAccountField(RegexField):
+    """
+    Validates that the given input is a valid Norwegian bank account number.
+    Valid numbers have 11 digits, and uses a checksum algorithm documented at
+    http://no.wikipedia.org/wiki/Kontonummer (TODO: replace link with better
+    documentation)
+    """
+    default_error_messages = {'invalid': _("Please enter a valid Norwegian bank account number")}
+
+    def __init__(self, *args, **kwargs):
+        kwargs['regex'] = re.compile(r'^(\d{4})[\. ]?(\d{2})[\. ]?(\d{5})$')
+        kwargs['max_length'] = 13
+        super(NOBankAccountField, self).__init__(*args, **kwargs)
+
+    def to_python(self, value):
+        "Normalizes the value by removing periods and spaces."
+        return value.replace('.', '').replace(' ', '')
+
+    def validate(self, value): 
+        "Validate checksum in value"
+        super(NOBankAccountField, self).validate(value)
+        digits, checksum = map(int, list(value)[:10])[::-1], int(value[-1])
+        weights = [2,3,4,5,6,7,2,3,4,5] # see http://no.wikipedia.org/wiki/MOD11
+        if (multiply_reduce(digits, weights) % 11) != checksum:
+            raise ValidationError(self.default_error_messages['invalid'], code='invalid')
