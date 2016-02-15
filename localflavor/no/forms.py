@@ -216,7 +216,7 @@ class NOBankAccountField(RegexField):
         digits, checksum = map(int, list(value)[:10])[::-1], int(value[-1])
         weights = [2, 3, 4, 5, 6, 7, 2, 3, 4, 5]  # see http://no.wikipedia.org/wiki/MOD11
         calculated_checksum = (11 - multiply_reduce(digits, weights) % 11)
-        if calculated_checksum == 10:
+        if calculated_checksum == 11:
             calculated_checksum = 0
         if calculated_checksum != checksum:
             raise ValidationError(self.default_error_messages['invalid'], code='invalid')
