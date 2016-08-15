@@ -159,13 +159,15 @@ class NOOrganisationNumberField(RegexField):
     def to_python(self, value):
         match = self.regex.match(value)
         if match:
-            groups = match.groups ()
+            groups = match.groups()
             prefix, suffix = groups[0] if groups[0] else '', groups[-1] if groups[-1] else ''
             return prefix + ''.join(match.groups()[1:4]) + suffix
         return value
 
     def clean(self, value):
         value = super(NOOrganisationNumberField, self).clean(value)
+        if not value and not self.required:
+            return value
         number = ''.join(self.regex.match(value).groups()[1:4])
         digits, checksum = map(int, list(number)[:8]), int(number[-1])
         weights = [3, 2, 7, 6, 5, 4, 3, 2]
