@@ -171,7 +171,9 @@ class NOOrganisationNumberField(RegexField):
         number = ''.join(self.regex.match(value).groups()[1:4])
         digits, checksum = map(int, list(number)[:8]), int(number[-1])
         weights = [3, 2, 7, 6, 5, 4, 3, 2]
-        calculated_checksum = (11 - multiply_reduce(digits, weights) % 11)
+        modded_checksum = multiply_reduce(digits, weights) % 11
+        # The checksum (after modulus) could resolve to 0, in which we will not expect a remainder
+        calculated_checksum = 11 - modded_checksum if modded_checksum else 0
         if calculated_checksum == 10 or calculated_checksum != checksum:
             raise ValidationError(self.default_error_messages['invalid'], code='invalid')
         return value
