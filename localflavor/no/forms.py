@@ -105,3 +105,75 @@ class NOPhoneNumberField(RegexField):
     def __init__(self, max_length=None, min_length=None, *args, **kwargs):
         super(NOPhoneNumberField, self).__init__(r'^(?:\+47)? ?(\d{3}\s?\d{2}\s?\d{3}|\d{2}\s?\d{2}\s?\d{2}\s?\d{2})$',
                                                  max_length, min_length, *args, **kwargs)
+
+
+def multiply_reduce(aval, bval):
+    return sum([(a * b) for (a, b) in zip(aval, bval)])
+
+
+class NOBankAccountField(RegexField):
+    """
+    Validates that the given input is a valid Norwegian bank account number.
+    Valid numbers have 11 digits, and uses a checksum algorithm documented at
+    http://no.wikipedia.org/wiki/Kontonummer (TODO: replace link with better
+    documentation)
+    """
+    default_error_messages = {'invalid': _("Please enter a valid Norwegian bank account number")}
+
+    def __init__(self, *args, **kwargs):
+        kwargs['regex'] = re.compile(r'^(\d{4})[\. ]?(\d{2})[\. ]?(\d{5})$')
+        kwargs['max_length'] = 13
+        super(NOBankAccountField, self).__init__(*args, **kwargs)
+
+    def to_python(self, value):
+        "Normalizes the value by removing periods and spaces."
+        return value.replace('.', '').replace(' ', '')
+
+    def clean(self, value):
+        "Validate checksum in value"
+        value = super(NOBankAccountField, self).clean(value)
+        digits, checksum = map(int, list(value)[:10])[::-1], int(value[-1])
+        weights = [2, 3, 4, 5, 6, 7, 2, 3, 4, 5]  # see http://no.wikipedia.org/wiki/MOD11
+        calculated_checksum = (11 - multiply_reduce(digits, weights) % 11)
+        if calculated_checksum == 11:
+            calculated_checksum = 0
+        if calculated_checksum != checksum:
+            raise ValidationError(self.default_error_messages['invalid'], code='invalid')
+        return value
+
+
+class NOOrganisationNumberField(RegexField):
+    """
+    Validates the input as a Norwegian "organisasjonsnummer", which is a 9
+    digit number with a checksum using modulus 11. The format is documented at
+    http://www.brreg.no/samordning/organisasjonsnummer.html (in Norwegian).
+    """
+
+    default_error_messages = {'invalid': _("Please enter a valid Norwegian organisation number")}
+
+    def __init__(self, *args, **kwargs):
+        kwargs['regex'] = re.compile(r'^(NO )?(\d{3}) ?(\d{3}) ?(\d{3})( MVA)?$', re.IGNORECASE)
+        kwargs['max_length'] = 18
+        super(NOOrganisationNumberField, self).__init__(*args, **kwargs)
+
+    def to_python(self, value):
+        match = self.regex.match(value)
+        if match:
+            groups = match.groups()
+            prefix, suffix = groups[0] if groups[0] else '', groups[-1] if groups[-1] else ''
+            return prefix + ''.join(match.groups()[1:4]) + suffix
+        return value
+
+    def clean(self, value):
+        value = super(NOOrganisationNumberField, self).clean(value)
+        if not value and not self.required:
+            return value
+        number = ''.join(self.regex.match(value).groups()[1:4])
+        digits, checksum = map(int, list(number)[:8]), int(number[-1])
+        weights = [3, 2, 7, 6, 5, 4, 3, 2]
+        modded_checksum = multiply_reduce(digits, weights) % 11
+        # The checksum (after modulus) could resolve to 0, in which we will not expect a remainder
+        calculated_checksum = 11 - modded_checksum if modded_checksum else 0
+        if calculated_checksum == 10 or calculated_checksum != checksum:
+            raise ValidationError(self.default_error_messages['invalid'], code='invalid')
+        return value
